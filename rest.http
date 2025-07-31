@@ -1,0 +1,13 @@
+{
+  "user_id": "trader_alpha",
+  "action": "place_limit_order",
+  "exchange": "binance",
+  "api_key": "YOUR_BINANCE_API_KEY",
+  "api_secret": "YOUR_BINANCE_SECRET_KEY",
+  "params": {
+    "symbol": "BTC/USDT",
+    "side": "buy",
+    "amount": 0.001,
+    "price": 55000.0
+  }
+}

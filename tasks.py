@@ -1,14 +1,38 @@
-# tasks.py
+import os
+import sys
+import pika
+import json
+import config
+# ensure the project root is on PYTHONPATH so we can import server
+project_root = os.path.dirname(os.path.abspath(__file__))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from celery_app import celery_app
-from unified_exchange import UnifiedExchangeAPI  # Assuming the classes are in this file
+from unified_exchange import UnifiedExchangeAPI
+
+def publish_result(body: dict):
+    """
+    Publishes the result to a RabbitMQ fanout exchange.
+    """
+    connection = pika.BlockingConnection(pika.URLParameters(config.RABBITMQ_URL))
+    channel = connection.channel()
+    channel.exchange_declare(exchange='notifications_exchange', exchange_type='fanout')
+    channel.basic_publish(
+        exchange='notifications_exchange',
+        routing_key='',
+        body=json.dumps(body)
+    )
+    connection.close()
+    print(f"Worker published FINAL result for user {body}")
 
 @celery_app.task
 def handle_api_request(request_data: dict):
+    import server  # now resolves correctly
+
     """
     A Celery task to handle a private API request for a user via the UnifiedExchangeAPI.
     """
-    import server # We import server to use its broadcast function
-
     user_id = request_data.get('user_id')
     action = request_data.get('action')
     exchange_name = request_data.get('exchange')
@@ -16,7 +40,7 @@ def handle_api_request(request_data: dict):
     # --- Extract Credentials ---
     api_key = request_data.get('api_key')
     api_secret = request_data.get('api_secret')
-    # Handle extra credentials like Bitmart's UID
+    is_testnet = request_data.get('is_testnet', False)
     other_creds = {'uid': request_data.get('uid')} if request_data.get('uid') else {}
 
     print(f"Worker received job for User '{user_id}' | Exchange: '{exchange_name}' | Action: '{action}'")
@@ -26,35 +50,48 @@ def handle_api_request(request_data: dict):
         server.broadcast_message(user_id, error_msg)
         return error_msg
 
-    result = None
     try:
-        # Initialize the unified client with user's specific keys
         client = UnifiedExchangeAPI(
             exchange_name=exchange_name,
             api_key=api_key,
             secret_key=api_secret,
+            is_testnet=is_testnet,
             **other_creds
         )
-        
         order_params = request_data.get('params', {})
 
-        # Execute the requested action
         if action == 'get_account_info':
             result = client.get_account_info()
         elif action == 'place_market_order':
             result = client.place_market_order(**order_params)
         elif action == 'place_limit_order':
-            result = client.place_limit_order(**order_params)
+            initial = client.place_limit_order(**order_params)
+
+            # publish initial "placed" state
+            publish_result({
+                "user_id": user_id,
+                "payload": {"action": action, "status": "placed", "data": initial}
+            })
+
+            # now poll until it's closed/filled
+            result = client.monitor_order(initial['id'], order_params['symbol'])
         else:
             result = {"status": "error", "message": f"Unknown action: {action}"}
             
     except Exception as e:
         print(f"An error occurred while processing request for {user_id}: {e}")
-        # ccxt often raises specific, informative errors
         result = {"status": "error", "message": str(e)}
 
-    # Send the result back to the specific user via the WebSocket server
-    final_response = {"action": action, "status": "completed", "data": result}
-    server.broadcast_message(user_id, final_response)
-    
-    return "Task completed."
+    # final notification when order is closed/rejected/canceled
+    final_payload = {
+        "action": action,
+        "status": result.get("status"),
+        "data": result
+    }
+
+    # also publish to RabbitMQ
+    publish_result({
+        "user_id": user_id,
+        "payload": final_payload
+    })
+    return "Task and monitoring completed."
