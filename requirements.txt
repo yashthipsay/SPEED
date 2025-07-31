@@ -1,0 +1,4 @@
+celery==5.4.0
+websockets==12.0
+requests
+ccxt
