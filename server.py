@@ -60,20 +60,22 @@ def broadcast_message(user_id: str, message: dict):
 async def ws_handler(websocket: WebSocket):
     """Handles incoming WebSocket connections and messages."""
     await websocket.accept()
+    account_name = None
     user_id = None
     try:
         # The first message should be for authentication to identify the user
         auth_message = await websocket.receive_text()
         data = json.loads(auth_message)
         user_id = data.get('user_id')
+        account_name = data.get('account_name')
         
         if not user_id:
             await websocket.close(1008, "User ID is required for connection.")
             return
 
         CONNECTED_CLIENTS[user_id] = websocket
-        print(f"User '{user_id}' connected.")
-        await websocket.send_json({"status": "connected", "user_id": user_id})
+        print(f"User '{account_name}' with user ID '{user_id}' connected.")
+        await websocket.send_json({"status": "connected", "account_name": account_name,"user_id": user_id})
 
         # proxy further messages into Celery
         while True:

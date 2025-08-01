@@ -1,4 +1,5 @@
 {
+  "account_name": "yash",
   "user_id": "trader_alpha",
   "action": "place_limit_order",
   "exchange": "binance",
@@ -11,3 +12,16 @@
     "price": 55000.0
   }
 }
+
+
+### Start orderbook
+
+{
+  "action": "start_orderbook",
+  "exchange": "binance", 
+  "symbol": "BTC/USDT"
+}
+
+### Stop orderbook
+
+{"action": "stop_orderbook"}

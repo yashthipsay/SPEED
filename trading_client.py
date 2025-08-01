@@ -10,6 +10,7 @@ import sys, time
 # --- Global state for the Terminal UI ---
 best_bid_ask_display = "Waiting for orderbook command..."
 l2_book_display = "Connect and send 'start_orderbook' action to begin."
+position_pnl_display = "No active positions being monitored."
 message_log = deque(maxlen=10)
 orderbook_task = None
 current_exchange = None
@@ -120,6 +121,20 @@ async def handle_server_messages(websocket):
                 best_bid_ask_display = "Orderbook stopped."
                 l2_book_display = "Send 'start_orderbook' to resume."
                 message_log.append(f"[{timestamp}] Stopped orderbook")
+
+            elif action == 'pnl_update':
+                status = data.get('status')
+                if status == 'monitoring':
+                    pnl_data = data.get('data', {})
+                    # Format the PnL data into a readable string
+                    position_pnl_display = (
+                        f"  ➡️  Account: {pnl_data.get('connector_name', 'N/A')} | Pair: {pnl_data.get('pair_name', 'N/A')}\n"
+                        f"      Side: {pnl_data.get('position_side', 'N/A').upper()} | Quantity: {pnl_data.get('quantity', 0)}\n"
+                        f"      Entry: {pnl_data.get('entry_price', 0):.4f} | Current: {pnl_data.get('current_price', 0):.4f}\n"
+                        f"      💰 Unrealized PnL: {pnl_data.get('NetPnL', 0):.4f}"
+                    )
+                elif status == 'stopped':
+                    position_pnl_display = "Position monitoring stopped."
                 
         except json.JSONDecodeError:
             pass  # Message wasn't JSON, just log it
@@ -134,6 +149,8 @@ async def display_ui():
         print(best_bid_ask_display)
         print("\n--- L2 Order Book ---")
         print(l2_book_display)
+        print("\n--- 📊 Position & PnL ---")
+        print(position_pnl_display)
         print("\n--- Server Message Log ---")
         for msg in message_log:
             print(msg)
@@ -142,13 +159,16 @@ async def display_ui():
         print("Send via WebSocket: {'action': 'stop_orderbook'}")
         await asyncio.sleep(0.1)  # UI Redraw rate
 
-async def run_client(user_id):
+async def run_client(user_id, account_name=None):
     """Sets up all tasks and connects to the server."""
     global message_log
     uri = f"ws://{config.WEBSOCKET_HOST}:{config.WEBSOCKET_PORT}"
     try:
         async with websockets.connect(uri) as websocket:
-            await websocket.send(json.dumps({"user_id": user_id}))
+            auth_data = {"user_id": user_id}
+            if account_name:
+                auth_data["account_name"] = account_name
+            await websocket.send(json.dumps(auth_data))
             response = await websocket.recv()
             message_log.append(f"Server response: {response}")
 
@@ -165,10 +185,11 @@ async def run_client(user_id):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Trading client waiting for orderbook commands.")
     parser.add_argument("user_id", help="A unique ID for the user (e.g., trader_alpha).")
+    parser.add_argument("--account_name", help="Optional account name for the user.")
     
     args = parser.parse_args()
     
     try:
-        asyncio.run(run_client(args.user_id))
+        asyncio.run(run_client(args.user_id, args.account_name))
     except KeyboardInterrupt:
         print("\nClient stopped.")
