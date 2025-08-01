@@ -3,6 +3,7 @@ import sys
 import pika
 import json
 import config
+from symbol_mapper import SymbolMapper 
 # ensure the project root is on PYTHONPATH so we can import server
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
@@ -41,6 +42,8 @@ def task_monitor_pnl(request_data: dict, filled_order: dict):
         exchange_name=request_data.get('exchange'),
         api_key=request_data.get('api_key'),
         secret_key=request_data.get('api_secret'),
+        password=request_data.get('password'), # Pass the password
+        symbol_mapper=SymbolMapper(),
         is_testnet=request_data.get('is_testnet', False)
     )
 
@@ -70,6 +73,7 @@ def handle_api_request(request_data: dict):
     # --- Extract Credentials ---
     api_key = request_data.get('api_key')
     api_secret = request_data.get('api_secret')
+    password = request_data.get('password') # Extract password
     is_testnet = request_data.get('is_testnet', False)
     other_creds = {'uid': request_data.get('uid')} if request_data.get('uid') else {}
 
@@ -86,6 +90,8 @@ def handle_api_request(request_data: dict):
             exchange_name=exchange_name,
             api_key=api_key,
             secret_key=api_secret,
+            password=password, # Pass the password
+            symbol_mapper=SymbolMapper(),
             is_testnet=is_testnet,
             **other_creds
         )
@@ -99,11 +105,20 @@ def handle_api_request(request_data: dict):
                 "user_id": user_id,
                 "payload": {"action": action, "status": "placed", "data": initial}
             })
-            result = initial
+            
+            filled_order = client.monitor_order(initial['id'], order_params['symbol'])
 
-            if initial.get('status') in ['closed', 'filled']:
+            publish_result({
+                "user_id": user_id,
+                "payload": {"action": action, "status": "filled", "data": filled_order}
+            })
+
+            if filled_order.get('status') in ['closed', 'filled']:
                 # Start PnL monitoring if the order was filled
-                task_monitor_pnl.delay(request_data, initial)
+                task_monitor_pnl.delay(request_data, filled_order)
+
+            # set result
+            result = filled_order
         elif action == 'place_limit_order':
             initial = client.place_limit_order(**order_params)
 
