@@ -267,3 +267,25 @@ python3 symbol_mapper.py
   - Detailed logs are printed for all failures; errors are also broadcast back to the client for UI notification.
 - **Backtesting/Research:**  
   - Use the S3 Parquet database for rapid data frame loading and market simulation.
+
+
+
+## Open-Ended Challenge: Architectural Review & Strategy Proposal
+
+### System Design & Scalability
+The current system is functionality sound, leveraging FastAPI, Celery, and RabbitMQ to decouple services and support asynchronous task execution. However, some bottlenecks remain:
+
+- **(1):** We are not tracking rate-limits for specific exchanges, which can cause rate limit if the number of concurrent operations in a queue are more(like we have during the stress tests). This problem was seen for OKX exchange. At  scale, this could lead to rate-limit breaches ot IP bans, that could bring a halt in it's working(imagine if users were using it in production).
+
+- **(2):** Logs and WebSocket responses currently log lengthy ccxt data, which is overwhelming for users. Logs should be restructured to show concise, relevant info such as order status, filled quantity, and timestamps. Parquet files would also benefit from a flatter schema for simpler analysis.
+
+- **Note:** This is something that I've not explored on a bigger scale, but we can have a centralized rate-limit handling bucket or cache, which would be managed across the queue. Again much research is needed to implement such an algorithm, especially at a larger scale.
+
+### Error handing and resilience
+To build a resilient system that can recover from failures and maintain state consistency:
+- **(1):** Even if we aren't implementing a centralized caching engine for rate-limiting and other features, we can keep the logging for specific ccxt exceptions like `AuthenticationError`, `RateLimitExceeded`, and `ExchangeNotAvailable`. This enables more meaningful feedback and appropriate retry logic.
+- **(2):** WebSocket receive timeouts under high-concurrency can lead to false negatives (e.g., a fill arrives after the client has already timed out). To address this:
+   - Increase the WebSocket timeout for slower exchanges (we used 120 s for Deribit).  
+   - Retry failed requests automatically, waiting a bit longer each time, so short network or exchange hiccups don’t cause permanent failures. 
+   - Ensure the fanout broadcast and client listeners remain in sync by acknowledging “placed” before starting the timer(which is optional but useful sometimes)
+
