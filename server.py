@@ -6,6 +6,7 @@ from fastapi import FastAPI, WebSocket
 from tasks import handle_api_request, task_persist_orderbook_data
 from celery_app import celery_app
 from aio_pika import connect_robust, ExchangeType, IncomingMessage
+from starlette.websockets import WebSocketDisconnect
 
 app = FastAPI()
 
@@ -129,8 +130,8 @@ async def ws_handler(websocket: WebSocket):
                     "message": f"Unknown action: {action}"
                 })
 
-    except websockets.exceptions.ConnectionClosed:
-        print(f"User '{user_id}' disconnected.")
+    except WebSocketDisconnect:
+        print(f"User '{user_id}' disconnected (normal closure).")
     finally:
         # Clean up the connection on disconnect
         if user_id and user_id in CONNECTED_CLIENTS:

@@ -199,6 +199,43 @@ python stress_test.py
 
 You can modify exchanges, credentials, and symbols in the `TEST_ACCOUNTS` array within `stress_test.py` for your environment.
 
+### 📊 Stress Test Results (BinanceUSDM & BinanceCOINM)
+
+<!-- vertical layout, one below the other -->
+**Stress Test 1**  
+![Stress Test 1](stress_test_1_bnb.png)  
+
+**Stress Test 2**  
+![Stress Test 2](stress_test_2_bnb.png)  
+
+**Stress Test 3**  
+![Stress Test 3](stress_test_3_bnb.png)  
+
+---
+
+### 📊 Stress Test 4: OKX & Binance (USDM & COINM) Combined (100 Orders)
+
+Running 200 concurrent orders on OKX + Binance triggered rate limits, so we reduced to **100** clients:
+
+**Stress Test 4 Results**  
+![Stress Test 4 OKX & Binance](stress_test_4_bnb_okx.png)  
+
+---
+
+### 📊 Deribit Stress Test (50 Orders) & Timeout Tuning
+
+Deribit’s matching is relatively slower. We ran **50** concurrent clients:
+
+- With the default **30 s** WebSocket timeout, many fills appeared as failures (false negatives):
+
+  **30 s Timeout – Many False Negatives**  
+  ![Deribit Failures (30s Timeout)](deribit_tests_failing.png)  
+
+- After extending the WebSocket recv timeout to **120 s**, all orders passed, yielding accurate data:
+
+  **120 s Timeout – All Orders Filled**  
+  ![Deribit Success (120s Timeout)](deribit_stress_test_success.png)  
+
 ## Symbol Mapper: Standardization Utility
 
 ### Generate and Explore Exchange Symbol Mappings
