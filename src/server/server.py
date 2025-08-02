@@ -1,10 +1,10 @@
 import asyncio
 import json
-import config
+import src.config as config
 import websockets
 from fastapi import FastAPI, WebSocket
-from tasks import handle_api_request, task_persist_orderbook_data
-from celery_app import celery_app
+from src.tasks.tasks import handle_api_request, task_persist_orderbook_data
+from src.celery_app import celery_app
 from aio_pika import connect_robust, ExchangeType, IncomingMessage
 from starlette.websockets import WebSocketDisconnect
 

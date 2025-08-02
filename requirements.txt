@@ -10,4 +10,4 @@ boto3
 pandas
 pyarrow
 aiohttp
-dotenv
+python-dotenv

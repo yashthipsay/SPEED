@@ -2,7 +2,7 @@ import asyncio
 import websockets
 import json
 import argparse
-import config
+import src.config as config
 import ccxt.async_support as ccxt
 from collections import deque
 import sys, time

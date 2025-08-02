@@ -153,20 +153,27 @@ uvicorn server:app --host localhost --port 8765 --reload
 ### 4. Start the Celery Worker
 
 ```bash
-celery -A celery_app:celery_app worker --loglevel=info --concurrency=16
+# ensure the root dir is on PYTHONPATH so `src` is importable
+# Enter the command below in the same terminal as the queue, before starting the queue
+export PYTHONPATH=$(pwd)
+# Start the queue
+celery -A src.celery_app:celery_app worker --loglevel=info --concurrency=16
 ```
 
-### 5. Launch the Terminal Trading Client
+### 5. Launch the Terminal Trading Client (Recommended only for orderbook)
 
 ```bash
-python trading_client.py --account_name yash trader_alpha
+python -m clients.trading_client trader_alpha --account_name yash
 ```
+#### Use postman client for placing orders, while you view the order book on your Terminal Trading Client.
+
+![alt text](images/postman_client.png)
 
 ### 6. Start Orderbook Capture
 
 In the terminal client, enter:
 ```json
-{"action": "start_orderbook", "exchange": "binanceusdm", "symbol": "BTC/USDT"}
+{"action": "start_orderbook", "exchange": "binanceusdm", "symbol": "XLM/USDT"}
 ```
 You will see the live orderbook begin populating.
 
@@ -189,7 +196,7 @@ To stop persistent recording to S3:
 
 To run the high-concurrency test:
 ```bash
-python stress_test.py
+python -m clients.stress_test
 ```
 - This script will:
     - Spawn 200 WebSocket clients.
@@ -203,13 +210,13 @@ You can modify exchanges, credentials, and symbols in the `TEST_ACCOUNTS` array 
 
 <!-- vertical layout, one below the other -->
 **Stress Test 1**  
-![Stress Test 1](stress_test_1_bnb.png)  
+![Stress Test 1](images/stress_test_1_bnb.png)  
 
 **Stress Test 2**  
-![Stress Test 2](stress_test_2_bnb.png)  
+![Stress Test 2](images/stress_test_2_bnb.png)  
 
 **Stress Test 3**  
-![Stress Test 3](stress_test_3_bnb.png)  
+![Stress Test 3](images/stress_test_3_bnb.png)  
 
 ---
 
@@ -218,7 +225,7 @@ You can modify exchanges, credentials, and symbols in the `TEST_ACCOUNTS` array 
 Running 200 concurrent orders on OKX + Binance triggered rate limits, so we reduced to **100** clients:
 
 **Stress Test 4 Results**  
-![Stress Test 4 OKX & Binance](stress_test_4_bnb_okx.png)  
+![Stress Test 4 OKX & Binance](images/stress_test_4_bnb_okx.png)  
 
 ---
 
@@ -229,12 +236,12 @@ Deribit’s matching is relatively slower. We ran **50** concurrent clients:
 - With the default **30 s** WebSocket timeout, many fills appeared as failures (false negatives):
 
   **30 s Timeout – Many False Negatives**  
-  ![Deribit Failures (30s Timeout)](deribit_tests_failing.png)  
+  ![Deribit Failures (30s Timeout)](images/deribit_tests_failing.png)  
 
 - After extending the WebSocket recv timeout to **120 s**, all orders passed, yielding accurate data:
 
   **120 s Timeout – All Orders Filled**  
-  ![Deribit Success (120s Timeout)](deribit_stress_test_success.png)  
+  ![Deribit Success (120s Timeout)](images/deribit_stress_test_success.png)  
 
 ## Symbol Mapper: Standardization Utility
 

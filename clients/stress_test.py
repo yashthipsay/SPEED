@@ -3,39 +3,39 @@ import websockets
 import json
 import random
 import time
-import config
+import src.config as config
 
-TOTAL_CLIENTS = 50
+TOTAL_CLIENTS = 100
 
 SERVER_URI = f"ws://{config.WEBSOCKET_HOST}:{config.WEBSOCKET_PORT}"
 
 TEST_ACCOUNTS = [
-    # {
-    #     "account_name": "binance_coinm_test",
-    #     "exchange": "binancecoinm",
-    #     "api_key": "22d58986ab817ec4b5df258849fba623fb37fe2d0f74bc643aee78b18b6e765a",
-    #     "api_secret": "53345063fd96a009a2dfd71e4c3f114123661eda7948c5c3cc3b5ec347217a6e",
-    #     "is_testnet": True,
-    #     "symbols": ["BTC/USDT", "ETH/USDT"]
-    # },
-    # {
-    #     "account_name": "binance_usdm_test",
-    #     "exchange": "binanceusdm",
-    #     "api_key": "22d58986ab817ec4b5df258849fba623fb37fe2d0f74bc643aee78b18b6e765a",
-    #     "api_secret": "53345063fd96a009a2dfd71e4c3f114123661eda7948c5c3cc3b5ec347217a6e",
-    #     "is_testnet": True,
-    #     "symbols": ["BTC/USDT:USDT", "ETH/USDT:USDT"]
-
-    # },
     {
-        "account_name": "deribit_test",
-        "exchange": "deribit",
-        "api_key": "oROD-D2E",
-        "api_secret": "hxMWiy9BYaAjP5sfOhNuoOco1GdgS1yteVakioCRI_8",
+        "account_name": "binance_coinm_test",
+        "exchange": "binancecoinm",
+        "api_key": "22d58986ab817ec4b5df258849fba623fb37fe2d0f74bc643aee78b18b6e765a",
+        "api_secret": "53345063fd96a009a2dfd71e4c3f114123661eda7948c5c3cc3b5ec347217a6e",
         "is_testnet": True,
-        "symbols": ["BTC/USD:BTC"]
+        "symbols": ["BTC/USDT", "ETH/USDT"]
+    },
+    {
+        "account_name": "binance_usdm_test",
+        "exchange": "binanceusdm",
+        "api_key": "22d58986ab817ec4b5df258849fba623fb37fe2d0f74bc643aee78b18b6e765a",
+        "api_secret": "53345063fd96a009a2dfd71e4c3f114123661eda7948c5c3cc3b5ec347217a6e",
+        "is_testnet": True,
+        "symbols": ["BTC/USDT:USDT", "ETH/USDT:USDT"]
 
     },
+    # {
+    #     "account_name": "deribit_test",
+    #     "exchange": "deribit",
+    #     "api_key": "oROD-D2E",
+    #     "api_secret": "hxMWiy9BYaAjP5sfOhNuoOco1GdgS1yteVakioCRI_8",
+    #     "is_testnet": True,
+    #     "symbols": ["BTC/USD:BTC"]
+
+    # },
     # {
     #     "account_name": "okx_test",
     #     "exchange": "okx",

@@ -1,7 +1,7 @@
 
 import ccxt
 import time 
-from symbol_mapper import SymbolMapper
+from src.exchanges.symbol_mapper import SymbolMapper
 
 # api credentials
 

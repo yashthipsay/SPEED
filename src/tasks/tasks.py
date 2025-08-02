@@ -2,9 +2,9 @@ import os
 import sys
 import pika
 import json
-import config
-from symbol_mapper import SymbolMapper 
-from data_persistor import S3Persistor
+import src.config as config
+from src.exchanges.symbol_mapper import SymbolMapper 
+from src.utils.data_persistor import S3Persistor
 import ccxt
 import time
 # ensure the project root is on PYTHONPATH so we can import server
@@ -12,8 +12,8 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from celery_app import celery_app
-from unified_exchange import UnifiedExchangeAPI
+from src.celery_app import celery_app
+from src.exchanges.unified_exchange import UnifiedExchangeAPI
 
 def publish_result(body: dict):
     """
@@ -93,7 +93,7 @@ def task_monitor_pnl(request_data: dict, filled_order: dict):
 
 @celery_app.task
 def handle_api_request(request_data: dict):
-    import server  # now resolves correctly
+    import src.server.server as server  # now resolves correctly
 
     """
     A Celery task to handle a private API request for a user via the UnifiedExchangeAPI.
