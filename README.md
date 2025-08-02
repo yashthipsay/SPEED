@@ -1,6 +1,6 @@
-# Cross-Exchange Trading Engine – Documentation & User Guide
+# SPEED(Smart Protocol for Efficient Execution & Delivery) – Documentation & User Guide
 
-Welcome to the documentation for the **Cross-Exchange Trading Engine Core**. This platform provides high-performance, modular interaction with multiple centralized cryptocurrency exchanges, supporting advanced market data retrieval, trade execution, symbol mapping, and historical data persistence for research and backtesting.
+Welcome to the documentation for the **Smart Protocol for Efficient Execution & Delivery**. This platform provides high-performance, modular interaction with multiple centralized cryptocurrency exchanges, supporting advanced market data retrieval, trade execution, symbol mapping, and historical data persistence for research and backtesting.
 
 ## Table of Contents
 
