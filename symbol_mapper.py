@@ -48,7 +48,7 @@ class SymbolMapper:
         Connects to specified exchanges to fetch and structure all market data.
         """
         # Add any exchanges you need to support here
-        exchanges_to_fetch = ['binance', 'binanceusdm', 'okx', 'kucoin', 'bitmart', 'deribit']
+        exchanges_to_fetch = ['binancecoinm', 'binanceusdm', 'okx', 'kucoin', 'bitmart', 'deribit']
         all_markets = {}
 
         for exchange_id in exchanges_to_fetch:

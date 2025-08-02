@@ -8,6 +8,7 @@ from collections import deque
 import sys, time
 
 # --- Global state for the Terminal UI ---
+pre_trade_analysis_display = "No pre-trade analysis requested."
 best_bid_ask_display = "Waiting for orderbook command..."
 l2_book_display = "Connect and send 'start_orderbook' action to begin."
 position_pnl_display = "No active positions being monitored."
@@ -96,8 +97,28 @@ async def handle_server_messages(websocket):
         try:
             data = json.loads(message)
             action = data.get('action')
-            
-            if action == 'start_orderbook':
+
+            if action == 'pre_trade_analysis':
+                analysis = data.get('data', {})
+                impact = analysis.get('price_impact', {})
+                funding = analysis.get('funding',{})
+                display_str = "--- Pre-Trade Analysis ---\n"
+                if impact.get('status') == 'success':
+                    display_str += (
+                        f"  Price Impact for {impact['trade_volume_quote']:.2f} USDT trade: {impact['price_impact_percent']:.4f}%\n"
+                        f"  - Est. Avg. Price: {impact['avg_execution_price']:.4f} vs Mid Price: {impact['mid_price']:.4f}\n" 
+                    )
+                else:
+                    display_str += f"  Price Impact: {impact.get('message', 'Error')}\n"
+                
+                if funding.get('status') == 'success':
+                    display_str += (
+                        f"  Funding Rate: {funding['funding_rate']:.6f} (APR: {funding['estimated_apr']:.2f}%)\n"
+                    )
+                else:
+                    display_str += f"  Funding Rate: {funding.get('message', 'N/A')}\n"
+                pre_trade_analysis_display = display_str
+            elif action == 'start_orderbook':
                 exchange = data.get('exchange')
                 symbol = data.get('symbol', 'BTC/USDT')
                 
@@ -142,22 +163,19 @@ async def handle_server_messages(websocket):
 async def display_ui():
     """Coroutine to continuously redraw the terminal UI."""
     while True:
-        print("\033c", end="")  # Clears the console
-        print("--- Trading Client (Orderbook Mode) ---")
-        if current_exchange and current_symbol:
-            print(f"Exchange: {current_exchange} | Symbol: {current_symbol}")
+        print("\033c", end="")
+        print("--- Trading Client ---")
         print(best_bid_ask_display)
         print("\n--- L2 Order Book ---")
         print(l2_book_display)
+        print("\n--- 🔬 Pre-Trade Analysis ---") # New UI section
+        print(pre_trade_analysis_display)
         print("\n--- 📊 Position & PnL ---")
         print(position_pnl_display)
         print("\n--- Server Message Log ---")
-        for msg in message_log:
-            print(msg)
-        print("\n--- Commands ---")
-        print("Send via WebSocket: {'action': 'start_orderbook', 'exchange': 'binance', 'symbol': 'BTC/USDT'}")
-        print("Send via WebSocket: {'action': 'stop_orderbook'}")
-        await asyncio.sleep(0.1)  # UI Redraw rate
+        for msg in message_log: print(msg)
+        print("\n--- Send Command (as single-line JSON) ---")
+        await asyncio.sleep(0.1)
 
 async def run_client(user_id, account_name=None):
     """Sets up all tasks and connects to the server."""

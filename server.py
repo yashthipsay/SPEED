@@ -3,7 +3,8 @@ import json
 import config
 import websockets
 from fastapi import FastAPI, WebSocket
-from tasks import handle_api_request
+from tasks import handle_api_request, task_persist_orderbook_data
+from celery_app import celery_app
 from aio_pika import connect_robust, ExchangeType, IncomingMessage
 
 app = FastAPI()
@@ -26,7 +27,8 @@ async def startup_rabbitmq_listener():
             body = json.loads(message.body)
             user_id = body.get("user_id")
             payload = body.get("payload")
-            websocket = CONNECTED_CLIENTS.get(user_id)
+            entry = CONNECTED_CLIENTS.get(user_id, {})
+            websocket = entry.get("websocket")
             if websocket:
                 await websocket.send_json(payload)
                 print(f"Broadcasted via WS to {user_id}: {payload}")
@@ -41,7 +43,8 @@ def broadcast_message(user_id: str, message: dict):
     """
     # This needs to run in the main server's event loop
     async def send_async():
-        websocket = CONNECTED_CLIENTS.get(user_id)
+        entry = CONNECTED_CLIENTS.get(user_id, {})
+        websocket = entry.get("websocket")
         if websocket:
             try:
                 await websocket.send_json(message)
@@ -73,7 +76,7 @@ async def ws_handler(websocket: WebSocket):
             await websocket.close(1008, "User ID is required for connection.")
             return
 
-        CONNECTED_CLIENTS[user_id] = websocket
+        CONNECTED_CLIENTS[user_id] = {"websocket": websocket, "persistence_task_id": None}
         print(f"User '{account_name}' with user ID '{user_id}' connected.")
         await websocket.send_json({"status": "connected", "account_name": account_name,"user_id": user_id})
 
@@ -83,20 +86,42 @@ async def ws_handler(websocket: WebSocket):
             req = json.loads(msg)
             action = req.get("action")
 
-            if action in ("get_account_info", "place_market_order", "place_limit_order"):
+            if action in ("get_account_info", "place_market_order", "place_limit_order", "analyze_and_place_order"):
                 # proxy trading actions into Celery
                 req["user_id"] = user_id
                 handle_api_request.delay(req)
                 await websocket.send_json({"status": "processing", "action": action})
 
-            elif action in ("start_orderbook", "stop_orderbook"):
-                # echo orderbook commands straight back to client
-                # so trading_client.handle_server_messages() can start/stop polling
-                await websocket.send_json({
-                    "action": action,
-                    "exchange": req.get("exchange"),
-                    "symbol": req.get("symbol", "BTC/USDT")
+            elif action == "start_orderbook":
+                # This action now serves two purposes:
+                # 1. Echo back to the client to start the UI polling.
+                # 2. Start the backend data persistence task.
+                exchange = req.get("exchange")
+                symbol = req.get("symbol", "BTC/USDT")
+                task = task_persist_orderbook_data.delay(
+                    exchange, symbol, config.DATA_CAPTURE_INTERVAL_SECONDS
+                )
+                # Now this works because CONNECTED_CLIENTS[user_id] is a dict
+                CONNECTED_CLIENTS[user_id]["persistence_task_id"] = task.id
+                print(f"Launched persistence task {task.id} for user {user_id}")
+
+                # Echo back on the socket stored in the dict:
+                await CONNECTED_CLIENTS[user_id]["websocket"].send_json({
+                    "action": action, "exchange": exchange, "symbol": symbol
                 })
+            elif action == "stop_orderbook_persistence":
+                task_id = CONNECTED_CLIENTS[user_id].get("persistence_task_id")
+                if task_id:
+                    print(f"Revoking persistence task {task_id} for user {user_id}")
+                    celery_app.control.revoke(task_id, terminate=True)
+                    CONNECTED_CLIENTS[user_id]["persistence_task_id"] = None
+                    await websocket.send_json({"status": "stopped", "action": action})
+                else:
+                    await websocket.send_json({"status": "error", "message": "No active persistence task found."})
+            
+            elif action == "stop_orderbook":
+                # This remains for stopping the UI polling on the client
+                await websocket.send_json({"action": action})
 
             else:
                 await websocket.send_json({
@@ -109,6 +134,11 @@ async def ws_handler(websocket: WebSocket):
     finally:
         # Clean up the connection on disconnect
         if user_id and user_id in CONNECTED_CLIENTS:
+            # Also terminate any running persistence task on disconnect
+            task_id = CONNECTED_CLIENTS[user_id].get("persistence_task_id")
+            if task_id:
+                print(f"Client disconnected, revoking task {task_id}")
+                celery_app.control.revoke(task_id, terminate=True)
             del CONNECTED_CLIENTS[user_id]
 
 @app.websocket("/")

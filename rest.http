@@ -16,11 +16,13 @@
 
 ### Start orderbook
 
-{"action": "start_orderbook", "exchange": "binance", "symbol": "BTC/USDT"}
+{"action": "start_orderbook", "exchange": "binanceusdm", "symbol": "BTC/USDT"}
 
 ### Stop orderbook
 
 {"action": "stop_orderbook"}
+
+{"action": "stop_orderbook_persistence"}
 
 
 # bitmart: Bitmart test
@@ -62,3 +64,22 @@ secretkey = "E00052E9F18323B53472CD64AF194764"
 IP = ""
 API key name = "okx demo"
 Permissions = "Read/Withdraw/Trade"
+
+{
+"account_name": "yash",
+  "user_id": "trader_alpha",
+  "action": "place_market_order",
+  "exchange": "binanceusdm",
+  "is_testnet": true,
+  "api_key": "22d58986ab817ec4b5df258849fba623fb37fe2d0f74bc643aee78b18b6e765a",
+  "api_secret": "53345063fd96a009a2dfd71e4c3f114123661eda7948c5c3cc3b5ec347217a6e",
+  "params": {
+    "symbol": "XLM/USDT:USDT",
+    "side": "sell",
+    "amount": 30,
+    "trade_volume_quote": 1650,
+    "dry_run": true
+  }
+}
+
+

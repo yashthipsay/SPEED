@@ -2,6 +2,7 @@
 import ccxt
 import time 
 from symbol_mapper import SymbolMapper
+
 # api credentials
 
 
@@ -56,6 +57,87 @@ class UnifiedExchangeAPI:
             print(f"Initialized client for {account_name} on {exchange_name} in TESTNET mode.")
         else:
             print(f"Initialized client for {account_name} on {exchange_name} in PRODUCTION mode.")
+
+    def get_funding_rate_info(self, symbol: str) -> dict:
+        """
+        Fetches funding rate data for a given symbol if it's a perpetual swap.
+        Also calculates an estimated APR.
+        """
+        market = self.client.market(symbol)
+        if not market.get('swap', False):
+            return {"status": "info", "message": "Symbol is not a perpetual swap, no funding rate applicable."}
+
+        try:
+            # Fetch live funding rate
+            funding_rate_data = self.client.fetch_funding_rate(symbol)
+            
+            # Calculate APR
+            rate = funding_rate_data.get('fundingRate', 0)
+            # Funding interval is in ms, so we calculate how many intervals per day
+            intervals_per_day = 24 * 60 * 60 * 1000 / market.get('fundingInterval', 8 * 60 * 60 * 1000)
+            apr = rate * intervals_per_day * 365 * 100  # As a percentage
+            
+            return {
+                "status": "success",
+                "symbol": symbol,
+                "funding_rate": funding_rate_data.get('fundingRate'),
+                "funding_timestamp": funding_rate_data.get('fundingTimestamp'),
+                "predicted_rate": funding_rate_data.get('markPrice'), # Note: some exchanges provide this, others don't
+                "estimated_apr": apr
+            }
+        except Exception as e:
+            return {"status": "error", "message": f"Could not fetch funding rate: {e}"}
+    
+    def calculate_price_impact(self, symbol: str, side: str, trade_volume_quote: float) -> dict:
+        """
+        Calculates the average execution price and price impact for a given trade volume
+        by walking the order book.
+        
+        Args:
+            symbol (str): The trading pair.
+            side (str): 'buy' or 'sell'.
+            trade_volume_quote (float): The trade amount in the quote currency (e.g., USDT).
+        """
+        try:
+            order_book = self.client.fetch_order_book(symbol, limit=100)
+            book_side = order_book['asks'] if side == 'buy' else order_book['bids']
+            
+            mid_price = (order_book['bids'][0][0] + order_book['asks'][0][0]) / 2
+            
+            accumulated_base = 0.0
+            accumulated_quote = 0.0
+            
+            for price, quantity in book_side:
+                level_cost_quote = price * quantity
+                
+                if accumulated_quote + level_cost_quote >= trade_volume_quote:
+                    # This level is enough to fill the rest of the order
+                    remaining_volume_quote = trade_volume_quote - accumulated_quote
+                    base_to_add = remaining_volume_quote / price
+                    accumulated_base += base_to_add
+                    accumulated_quote += remaining_volume_quote
+                    break
+                else:
+                    # Take the whole level
+                    accumulated_base += quantity
+                    accumulated_quote += level_cost_quote
+            
+            if accumulated_quote < trade_volume_quote:
+                return {"status": "error", "message": "Insufficient liquidity to fill the entire trade volume."}
+
+            avg_exec_price = accumulated_quote / accumulated_base
+            price_impact = ((avg_exec_price - mid_price) / mid_price) * 100
+            
+            return {
+                "status": "success",
+                "trade_volume_quote": trade_volume_quote,
+                "avg_execution_price": avg_exec_price,
+                "mid_price": mid_price,
+                "price_impact_percent": price_impact,
+                "base_quantity_filled": accumulated_base
+            }
+        except Exception as e:
+            return {"status": "error", "message": f"Could not calculate price impact: {e}"}
 
     # monitor ongoing orders
     def monitor_order(self, order_id: str, symbol: str):
@@ -145,8 +227,8 @@ class UnifiedExchangeAPI:
         print(f"✅ Starting PnL monitoring for position: {quantity} {pair_name}")
 
         try:
-            # Monitor for 5 minutes, yielding PnL updates every second
-            monitoring_end_time = time.time() + 300
+            # Monitor for 1 minutes, yielding PnL updates every second
+            monitoring_end_time = time.time() + 5
             while time.time() < monitoring_end_time:
                 # fetch the latest market price
                 ticker = self.client.fetch_ticker(pair_name)

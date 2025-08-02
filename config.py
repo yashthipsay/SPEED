@@ -3,6 +3,17 @@ RABBITMQ_URL = 'amqp://guest:guest@localhost:5672/'
 WEBSOCKET_HOST = 'localhost'
 WEBSOCKET_PORT = 8765
 
+# Your AWS credentials
+AWS_ACCESS_KEY_ID = "AWS_ACCESS_KEY_ID"
+AWS_SECRET_ACCESS_KEY = "AWS_SECRET_ACCESS_KEY"
+AWS_REGION = "AWS_REGION"  # Or your preferred region
+
+# The S3 bucket where order book data will be stored
+AWS_S3_BUCKET_NAME = "AWS_S3_BUCKET_NAME" 
+
+# Capture frequency for the order book data
+DATA_CAPTURE_INTERVAL_SECONDS = 1
+
 # --- API Keys (placeholder) ---
 # In production, load these from environment variables or a secure vault.
 API_KEYS = {

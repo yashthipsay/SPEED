@@ -4,6 +4,9 @@ import pika
 import json
 import config
 from symbol_mapper import SymbolMapper 
+from data_persistor import S3Persistor
+import ccxt
+import time
 # ensure the project root is on PYTHONPATH so we can import server
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
@@ -27,6 +30,36 @@ def publish_result(body: dict):
     connection.close()
     print(f"Worker published FINAL result for user {body}")
 
+
+@celery_app.task(bind=True)
+def task_persist_orderbook_data(self, exchange_id: str, symbol: str, interval: int):
+    """
+    A long-running Celery task that captures and persists order book data.
+    The `bind=True` allows us to access the task's own request context.
+    """
+    print(f"🚀 Starting data persistence pipeline for {symbol} on {exchange_id}...")
+    persistor = S3Persistor(
+        bucket_name=config.AWS_S3_BUCKET_NAME,
+        aws_access_key=config.AWS_ACCESS_KEY_ID,
+        aws_secret_key=config.AWS_SECRET_ACCESS_KEY,
+        region=config.AWS_REGION
+    )
+
+    # Initialize the ccxt client for this task
+    exchange = getattr(ccxt, exchange_id)()
+
+    while True:
+        try:
+            snapshot = exchange.fetch_order_book(symbol)
+            persistor.write_orderbook_snapshot(exchange_id, symbol, snapshot)
+        except Exception as e:
+            print(f"Error in persistence loop for {symbol}: {e}")
+        
+        # Wait for the configured interval
+        time.sleep(interval)
+
+    print(f"⏹️ Stopping data persistence for {symbol} on {exchange_id}.")
+    return "Data persistence task terminated."
 
 @celery_app.task
 def task_monitor_pnl(request_data: dict, filled_order: dict):
@@ -99,8 +132,48 @@ def handle_api_request(request_data: dict):
 
         if action == 'get_account_info':
             result = client.get_account_info()
+        elif action == 'analyze_and_place_order':
+            symbol = order_params.get('symbol')
+            side = order_params.get('side')
+            trade_volume_quote = order_params.get('trade_volume_quote')
+            dry_run = order_params.get('dry_run', False)
+
+            # Step 1: Perform Analysis
+            impact_analysis = client.calculate_price_impact(symbol, side, trade_volume_quote)
+            funding_analysis = client.get_funding_rate_info(symbol)
+
+            analysis_payload = {
+                "action": "pre_trade_analysis",
+                "status": "completed",
+                "data": {
+                    "price_impact": impact_analysis,
+                    "funding_rate": funding_analysis
+                }
+            }
+            publish_result({"user_id": user_id, "payload": analysis_payload})
+
+            if dry_run:
+                return "Dry run complete, no order placed."
+            
+            if impact_analysis['status'] == 'error':
+                raise Exception(f"Cannot place order: {impact_analysis['message']}")
+            
+            # Step 2: Place order using the calculated base quantity from the impact analysis
+            amount_to_trade = impact_analysis['base_quantity_filled']
+            initial_order = client.place_market_order(symbol, side, amount_to_trade)
+            
+            # Step 3: Monitor and finalize
+            filled_order = client.monitor_order(initial_order['id'], symbol)
+            result = filled_order
+            if filled_order.get('status') in ['closed', 'filled']:
+                task_monitor_pnl.delay(request_data, filled_order)
+
         elif action == 'place_market_order':
-            initial = client.place_market_order(**order_params)
+            initial = client.place_market_order(
+                symbol=order_params['symbol'],
+                side=order_params['side'],
+                amount=order_params['amount']
+            )
             publish_result({
                 "user_id": user_id,
                 "payload": {"action": action, "status": "placed", "data": initial}
