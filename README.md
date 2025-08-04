@@ -250,7 +250,7 @@ Deribit’s matching is relatively slower. We ran **50** concurrent clients:
 Normalize symbol IDs between any supported exchange and the universal format:
 
 ```bash
-python3 symbol_mapper.py
+python3 -m src.exchanges.symbol_mapper
 ```
 
 - Will fetch and cache all supported exchange market symbols into a JSON file.
